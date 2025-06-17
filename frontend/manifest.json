@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "EduMentorIA",
+  "version": "1.0",
+  "description": "Asistente educativo para docentes integrado al navegador.",
+  "permissions": ["scripting", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.frsf.utn.edu.ar/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "48": "icon.png"
+  },
+  "action": {
+    "default_title": "EduMentorIA"
+  }
+}
