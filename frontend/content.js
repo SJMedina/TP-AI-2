@@ -99,14 +99,12 @@ if (!document.getElementById('eduMentorWidget')) {
      }
    });
 
-   function getCursoDesdeBreadcrumb() {
-  const breadcrumb = document.querySelectorAll('ol.breadcrumb [itemprop="title"]');
-  if (!breadcrumb || breadcrumb.length === 0) return null;
+   function getContextoDesdePagina() {
+  const items = document.querySelectorAll('ol.breadcrumb [itemprop="title"]');
+  if (!items || items.length === 0) return "Sin contexto disponible";
+  return Array.from(items).map(el => el.textContent.trim()).join(" > ");
+   }
 
-  // Extrae el último título relevante
-  const contextos = Array.from(breadcrumb).map(el => el.textContent.trim());
-  return contextos.join(" > "); // ejemplo: "Grado > Ingeniería... > Inteligencia Artificial"
-  }
 
   document.getElementById('eduMentorSend').addEventListener('click', () => {
     const input = document.getElementById('eduMentorInput');
@@ -116,11 +114,15 @@ if (!document.getElementById('eduMentorWidget')) {
       messages.innerHTML += `<div><strong>Vos:</strong> ${msg}</div>`;
       input.value = '';
 
-      // Simulación de respuesta (reemplazá con llamada al backend)
-      fetch("http://localhost:5000/chat-stream", {
+      const contexto = getContextoDesdePagina();
+
+fetch("http://localhost:5000/chat-stream", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ message: msg, task: "generar_consigna" })
+  body: JSON.stringify({
+    message: msg,
+    context: contexto
+  })
 })
 .then(response => {
   const reader = response.body.getReader();
@@ -145,9 +147,7 @@ if (!document.getElementById('eduMentorWidget')) {
 })
 .catch((err) => {
   console.error("Error en streaming:", err);
-  messages.innerHTML += `<div style="color:red;">[Error al conectar con el servidor]</div>`;
+  messages.innerHTML += `<div style="color:red;">[Error al conectar con el servidor: ${err.message}]</div>`;
 });
 
-    }
-  });
 }
