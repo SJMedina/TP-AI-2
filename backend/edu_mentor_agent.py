@@ -5,12 +5,16 @@ from typing import List, Dict, Optional
 import requests
 from flask import stream_with_context, Response
 
+from backend import rag_engine
+from backend.rag import SimpleRAG
+
 
 class EduMentorAgent:
     def __init__(self, llm_model="mistral"):
         self.llm_model = llm_model  # ahora es el nombre del modelo cargado en Ollama
         self.memory = []  # memoria de corto plazo
         self.user_profile = {}  # datos del docente, curso, preferencias
+        self.rag = SimpleRAG()
 
     def set_user_profile(self, profile: Dict):
         """Establece el perfil del docente (curso, nivel, materia, etc.)"""
@@ -22,18 +26,27 @@ class EduMentorAgent:
         if len(self.memory) > 10:
             self.memory.pop(0)
 
-    def build_prompt(self, user_message: str, extra_context: str = "") -> str:
+    def build_prompt(self, user_message: str, extra_context: str = "", fragmentos_rag: list = None) -> str:
         if not extra_context:
             extra_context = f"{self.user_profile.get('curso', 'Curso no especificado')} – {self.user_profile.get('materia', 'Materia desconocida')}"
 
-        prompt = f"""Sos un asistente pedagógico para docentes universitarios. 
-        Contexto actual: {extra_context}
+        contexto = f"""Eres un asistente pedagógico inteligente que ayuda a docentes universitarios.
+    Contexto de navegación actual: {extra_context}
+    """
+        if fragmentos_rag:
+            contexto += "Fragmentos relevantes de documentos cargados:\n"
+            for i, frag in enumerate(fragmentos_rag):
+                contexto += f"[{i + 1}] {frag.strip()}\n"
+        else:
+            contexto += "No se encontraron documentos relevantes para esta consulta.\n"
 
-        Respondé con claridad, utilidad, y sin asumir tareas no pedidas.
+        prompt = f"""{contexto}
 
-        Mensaje del docente: {user_message}
+    Respondé con claridad, utilidad, y sin asumir tareas no pedidas.
 
-        Respuesta:"""
+    Mensaje del docente: {user_message}
+
+    Respuesta:"""
         return prompt
 
     from flask import Response, stream_with_context
@@ -67,12 +80,27 @@ class EduMentorAgent:
         if extra_context:
             self.user_profile["última_ubicación"] = extra_context
 
-        prompt = self.build_prompt(user_message, extra_context)
+        # Buscar fragmentos relevantes desde RAG si hay índice
+        contexto_rag = rag_engine.buscar_similares(user_message) if rag_engine.index else []
+
+        # Construir el prompt con el contexto y los fragmentos
+        prompt = self.build_prompt(user_message, extra_context, contexto_rag)
+
+        # Consultar al modelo y guardar la respuesta
         response = self.query_llm(prompt)
+
         self.update_memory({
             "entrada": user_message,
             "respuesta": response,
-            "contexto": extra_context
+            "contexto": extra_context,
+            "fragmentos_rag": contexto_rag
         })
+
         return response
 
+    def agregar_documento(self, texto):
+        self.rag.agregar_documento(texto)
+
+    def recuperar_contexto(self, pregunta):
+        fragmentos = self.rag.buscar_relevante(pregunta)
+        return "\n".join(fragmentos)

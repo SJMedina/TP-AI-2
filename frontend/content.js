@@ -83,9 +83,10 @@ if (!document.getElementById('eduMentorWidget')) {
     <div id="eduMentorHeader">EduMentorIA</div>
     <div id="eduMentorMessages"></div>
     <div id="eduMentorInputArea">
-      <input id="eduMentorInput" type="text" placeholder="Escribí tu pedido..." />
+      <input id="eduMentorInput" type="text" placeholder="Pregunta lo que quieras..." />
       <button id="eduMentorSend">➤</button>
     </div>
+    <input type="file" id="pdfUploader" accept="application/pdf">
   `;
   document.body.appendChild(chat);
 
@@ -148,6 +149,28 @@ fetch("http://localhost:5000/chat-stream", {
 .catch((err) => {
   console.error("Error en streaming:", err);
   messages.innerHTML += `<div style="color:red;">[Error al conectar con el servidor: ${err.message}]</div>`;
+});
+
+document.getElementById('pdfUploader').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("pdf", file);
+
+  fetch("http://localhost:5000/upload-pdf", {
+    method: "POST",
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    alert("✅ PDF cargado y procesado correctamente");
+    console.log("Texto extraído:", data.preview);
+  })
+  .catch(err => {
+    console.error("Error al subir el PDF:", err);
+    alert("❌ Error al subir el PDF");
+  });
 });
 
 }
