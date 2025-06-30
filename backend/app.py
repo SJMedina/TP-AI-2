@@ -9,20 +9,15 @@ app = Flask(__name__)
 CORS(app)
 
 init_db()
-
 rag_engine = RAGEngine()
 
-# Al iniciar, cargar todos los chunks guardados
+# Cargar todos los chunks guardados al iniciar
 todos_los_chunks = session.query(RAGChunk).all()
 documentos = [{"texto": c.texto} for c in todos_los_chunks]
 rag_engine.cargar_chunks(documentos)
 
-DOCUMENTOS_RAG = []  # Aquí se almacenan temporalmente los chunks
-rag_engine = RAGEngine()
-
-# Se inicializa el agente con un backend LLM local
-agent = EduMentorAgent(llm_model="mistral")  # LLM local en Ollama
-
+# Inicializar agente con modelo local
+agent = EduMentorAgent(llm_model="mistral")
 agent.set_user_profile({
     "curso": "Ingenieria en Sistemas de Informacion",
     "materia": "No especificado",
@@ -33,17 +28,26 @@ agent.set_user_profile({
 @app.route("/upload-pdf", methods=["POST"])
 def upload_pdf():
     if "pdf" not in request.files:
+        print("⚠ No se encontró el archivo 'pdf' en la petición")
         return jsonify({"error": "No se envió ningún archivo PDF"}), 400
 
     file = request.files["pdf"]
+    print(f"Archivo recibido: {file.filename}")
+
     if not file.filename.endswith(".pdf"):
+        print("El archivo no es un PDF válido")
         return jsonify({"error": "Formato no permitido"}), 400
 
     try:
-        texto = extraer_texto_pdf(file.read())
-        chunks = dividir_en_chunks(texto)
+        raw_bytes = file.read()
+        print(f"Tamaño del archivo en bytes: {len(raw_bytes)}")
 
-        # Guardamos los chunks para la fase de vectorización
+        texto = extraer_texto_pdf(raw_bytes)
+        print(f"Texto extraído (primeros 300): {texto[:300] if texto else 'NULO'}")
+
+        chunks = dividir_en_chunks(texto)
+        print(f"Total de chunks generados: {len(chunks)}")
+
         for chunk in chunks:
             nuevo = RAGChunk(
                 texto=chunk,
@@ -54,22 +58,30 @@ def upload_pdf():
             session.add(nuevo)
         session.commit()
 
+        nuevos_docs = [{"texto": chunk} for chunk in chunks]
+        rag_engine.cargar_chunks(nuevos_docs)
+
         return jsonify({
             "status": "ok",
             "total_chunks": len(chunks),
             "preview": chunks[:2]
         })
+
     except Exception as e:
+        print("Error en /upload-pdf:", e)
         return jsonify({"error": str(e)}), 500
+
+current_public_url = None
 
 @app.route("/chat-stream", methods=["POST"])
 def chat_stream():
     data = request.json
     mensaje = data.get("message", "")
     extra_context = data.get("context", "")
-    prompt = agent.build_prompt(mensaje, extra_context)
+
+    contexto_rag = rag_engine.buscar_similares(mensaje) if rag_engine.index else []
+    prompt = agent.build_prompt(mensaje, extra_context, contexto_rag)
     return agent.query_llm_stream(prompt)
 
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)

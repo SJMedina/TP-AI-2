@@ -3,6 +3,8 @@ import re
 import nltk
 
 nltk.download('punkt')
+nltk.download('punkt_tab')
+
 from nltk.tokenize import sent_tokenize
 
 def extraer_texto_pdf(file_bytes) -> str:
